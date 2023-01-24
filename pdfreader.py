@@ -8,7 +8,9 @@ from gevent.pywsgi import WSGIServer
 class PdfReader:
     def __init__(self):
         print('PDF to CSV convertor v1.0')
-        self.mapped_drive = 'Z:'
+        #assuming you map it to some drive, else replace this logic to find location of the file.
+        self.mapped_drive = 'Z:' 
+        #initialize the logger
         self.logger = log.get_logger("pdfreader")
         self.logger.info("Class initialized")
     def get_file(self, gen_date = ''):
@@ -24,8 +26,9 @@ class PdfReader:
         success = 1
         data = ''
         filename = ''
+        # read all files matching a pattern. You may modify this part as well to suite requirements.
         file_pattern = self.mapped_drive + os.sep +'Data_{0}*.PDF'.format(gen_date)
-        #get list of files matching the pattern
+        #---get list of files matching the pattern
         pdfFiles = glob.glob(file_pattern)
         if (len(pdfFiles) == 0):
             self.logger.error('File not found')
@@ -41,7 +44,7 @@ class PdfReader:
     
     def read_file(self, gen_date = ''):
         """
-        This method reads one DCS Report file generated for a given date and returns the data as a dataframe.
+        This method reads one PDF Report file generated for a given date and returns the data as a dataframe.
         It is expected the file name will be like "Data_20221122071008853.PDF"
         Params:
             gen_date: (string)Date that file is generated in YYYYMMDD format. e.g., 20221122
@@ -57,9 +60,11 @@ class PdfReader:
         elif (len(pdfFiles) > 1): 
             self.logger.warning('More than one file found. Program will randomly select one of these(sorted, so may be the latest)')
             pdfFiles.sort(reverse=True)
+        #use camelot to read the file    
         try: 
             self.logger.info('Reading file {0}'.format(pdfFiles[0]))
             #set the table area for better detection and read file using pdf reader
+            #see advanced camelot documentation : https://camelot-py.readthedocs.io/en/master/user/advanced.html
             pdf = camelot.read_pdf(pdfFiles[0], flavor='stream', table_areas=['20,760,530,200'], pages = 'all')
             #save the confidence report
             report = pdf[0].parsing_report
@@ -82,16 +87,20 @@ class PdfReader:
             df['CrTime']= spl[1]
             df['CrDateTime'] = dt
             #df.insert(0, 'CrDate', df.pop('CrDate'))
+            # these are the columns in my file, explore the PDF and the DF before you reach this point. Adjust accordingly.
             self.df = df.rename(columns={0:'DCSTAG', 1:'UNIT', 2:'SHIFT_1',3:'SHIFT_2',4:'SHIFT_3',5:'DAY_TOTAL'})
             self.df = self.df[1:]
+            # remove some unwanted columns.
             self.df = self.df[self.df.DCSTAG!='CONTENT']
             del df
             print('File read {0}'.format(report))
             return report, self.df
         except:  
             self.logger.exception('File could not be read: Exception raised')
+        #Tip: use plots to visualize the area read and improve the accuracy.    
         #camelot.plot(pdf[0], kind='contour').show()
         
+### Flask App starts here. We expose Camelot as a REST API now        
 app = Flask(__name__)
 
 @app.route('/pdf/getContent', methods=['GET'])
